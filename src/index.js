@@ -73,12 +73,52 @@ let coverttocsvandmerge = async () => {
 
 }
 
+let isEmptyArray = arr => arr.length == 0
 let addtohistory = () => {
-  let currentJSON = fs.readFileSync(locationData + "metaforecasts.json")
-  let historyJSON = fs.readFileSync(locationData + "metaforecasts_history_bootstrap.json")
-  for(let forecast of currentJSON){
+  console.log(new Date().toISOString())
+  let currentJSONraw = fs.readFileSync(locationData + "metaforecasts.json")
+  let currentJSON = JSON.parse(currentJSONraw)
+  let historyJSONraw = fs.readFileSync(locationData + "metaforecasts_history.json")
+  let historyJSON = JSON.parse(historyJSONraw)
 
+  let currentForecastsWithAHistory = currentJSON.filter(element => !isEmptyArray(historyJSON.filter(historyElement => historyElement.title == element.title && historyElement.url == element.url )))
+  // console.log(currentForecastsWithAHistory)
+
+  let currentForecastsWithoutAHistory = currentJSON.filter(element => isEmptyArray(historyJSON.filter(historyElement => historyElement.title == element.title && historyElement.url == element.url )))
+  // console.log(currentForecastsWithoutAHistory)
+  
+  // Add both types of forecast
+  let newHistoryJSON = []
+  for(let historyElement of historyJSON){
+    let correspondingNewElement = currentForecastsWithAHistory.filter(element => historyElement.title == element.title && historyElement.url == element.url )
+    let historyWithNewElement = historyElement["history"].concat({
+      "timestamp": correspondingNewElement.timestamp,
+      "options": correspondingNewElement.options,
+      "qualityindicators": correspondingNewElement.qualityindicators
+    })
+    let newHistoryElement = {...historyElement, "history": historyWithNewElement}
+    newHistoryJSON.push(newHistoryElement)
   }
+
+  for(let currentForecast of currentForecastsWithoutAHistory){
+    let newHistoryElement = ({...currentForecast, "history": [{
+      "timestamp": currentForecast.timestamp,
+      "options": currentForecast.options,
+      "qualityindicators": currentForecast.qualityindicators
+    }]})
+    delete newHistoryElement.timestamp
+    delete newHistoryElement.options
+    delete newHistoryElement.qualityindicators
+    newHistoryJSON.push(newHistoryElement)
+  }
+
+  console.log(newHistoryJSON)
+  writefile(JSON.stringify(newHistoryJSON, null, 2), "metaforecasts_history", "", ".json")
+  /*
+  
+  let forecastsAlreadyInHistory = currentJSON.filter(element => !isEmptyArray(historyJSON.filter(historyElement => historyElement.title == element.title && historyElement.url == element.url )))
+  */
+  console.log(new Date().toISOString())
 }
 
 async function whattodo(message,callback){
@@ -92,14 +132,17 @@ async function whattodo(message,callback){
   });
 }
 
-let functions = [csetforetell, elicit, estimize, fantasyscotus,  foretold, goodjudgment, goodjudgmentopen, hypermind, ladbrokes, metaculus, polymarket, predictit, omen, smarkets, williamhill, coverttocsvandmerge]
+let functions = [csetforetell, elicit, estimize, fantasyscotus,  foretold, goodjudgment, goodjudgmentopen, hypermind, ladbrokes, metaculus, polymarket, predictit, omen, smarkets, williamhill, coverttocsvandmerge, addtohistory]
 let functionNames =  functions.map(fun => fun.name)// ["csetforetell", "elicit", "estimize", "fantasyscotus", /* "foretold", */ "goodjudgment", "goodjudgmentopen", "hypermind", "ladbrokes", "metaculus", "polymarket", "predictit", "omen", "smarkets", "williamhill", "coverttocsvandmerge"]
-let whattodoMessage = "What do you want to do?\n" + 
-  functionNames.map((functionName,i) => i != (functionNames.length -1) ? `[${i}]: Download predictions from ${functionName}` : `[${i}]: Merge jsons them into one big json
-[${i+1}]: All of the above
-Choose one option, wisely: #`)
-  .join("\n")
-  
+let whattodoMessage = functionNames
+    .slice(0,functionNames.length-2)
+    .map((functionName,i) => `[${i}]: Download predictions from ${functionName}`)
+    .join('\n') +
+  `\n[${functionNames.length-2}]: Merge jsons them into one big json` + 
+  `\n[${functionNames.length-1}]: Add to history` + 
+  `\n[${functionNames.length}]: All of the above` + 
+  `\nChoose one option, wisely: #`
+
 let tryCatchTryAgain = async (fun) => {
   try{
     console.log("Initial try")
@@ -115,7 +158,7 @@ let executeoption = async (option) => {
   option = Number(option)
   //console.log(functionNames[option])
   if(option < 0){
-    console.log("Error, ${option} < 0")
+    console.log(`Error, ${option} < 0 or ${option} < 0`)
   }else if(option < functions.length){
     await tryCatchTryAgain(functions[option])
   } else if(option == functions.length){
